@@ -96,6 +96,18 @@ graphify-reviewer scan --sonar /opt/sonar-scanner/bin/sonar-scanner \
 
 Environment overrides: `GRAPHIFY_REVIEWER_CLAUDE_PATH`, `GRAPHIFY_REVIEWER_SONAR_PATH`, `GRAPHIFY_REVIEWER_NEXUS_IQ_PATH`, `GRAPHIFY_REVIEWER_GRAPHIFY_PATH`.
 
+## Claude Code Hook (autonomous trigger)
+
+```bash
+graphify-reviewer install-hook --cwd /path/to/repo
+```
+
+This writes a `PostToolUse` hook into `.claude/settings.json`. Whenever Claude Code runs `git commit`, the hook pipes the tool payload to `graphify-reviewer hook-stdin`, which detects the commit and launches the full scan pipeline autonomously. The hook always exits 0 so it never blocks Claude Code. The VS Code extension picks up the new reports via its file watcher — squiggles, the Vulnerability Explorer sidebar, and `report.md` all refresh automatically.
+
+## Platform Support
+
+The CLI and extension target **Ubuntu (x64/Linux)** and Windows: POSIX-aware shell quoting, LF line endings enforced via `.gitattributes` (the CLI shebang survives Linux checkouts), and missing-CLI detection handles both exit code 127 and Windows "not recognized" errors.
+
 ## Project Status
 
 | Step | Module | Status |
@@ -103,10 +115,10 @@ Environment overrides: `GRAPHIFY_REVIEWER_CLAUDE_PATH`, `GRAPHIFY_REVIEWER_SONAR
 | 1 | Scaffolding (`package.json`, `extension.ts`) | ✅ Done |
 | 2 | CLI Orchestrator (`src/core/runner.ts`) | ✅ Done |
 | 2b | CLI tool (`src/cli/index.ts`) + markdown report (`src/core/markdown.ts`) | ✅ Done |
-| 3 | Diagnostics (`src/diagnostics.ts`) | ⬜ Pending |
-| 4 | Code Actions (`src/codeActions.ts`) | ⬜ Pending |
-| 5 | Tree View (`src/treeView.ts`) | ⬜ Pending |
-| 6 | Claude Code commit hook | ⬜ Pending |
+| 3 | Diagnostics (`src/diagnostics.ts`) | ✅ Done |
+| 4 | Code Actions (`src/codeActions.ts`) | ✅ Done |
+| 5 | Tree View (`src/treeView.ts`) | ✅ Done |
+| 6 | Claude Code commit hook (`install-hook` / `hook-stdin`) | ✅ Done |
 
 ## Configuration
 

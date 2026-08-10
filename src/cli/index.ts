@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import * as path from 'path';
+import * as fs from 'fs';
 import { runAllScans, CliPaths } from '../core/runner';
 import { parseReportDir } from '../core/parser';
 import { writeMarkdownReport, renderMarkdown } from '../core/markdown';
@@ -12,6 +13,8 @@ import { writeMarkdownReport, renderMarkdown } from '../core/markdown';
  *                            [--graphify EXE] [--timeout MS]
  *                            [--sonar-arg ARG]... [--iq-arg ARG]...
  *   graphify-reviewer report [--cwd DIR] [--print]
+ *   graphify-reviewer install-hook [--cwd DIR]
+ *   graphify-reviewer hook-stdin            (invoked by the Claude Code hook)
  *
  * Environment overrides: GRAPHIFY_REVIEWER_CLAUDE_PATH, ..._SONAR_PATH,
  * ..._NEXUS_IQ_PATH, ..._GRAPHIFY_PATH.
@@ -85,6 +88,12 @@ Commands:
   scan     Run graphify, sonar-scanner, and nexus-iq-cli; writes JSON to
            .scanner-reports/ and renders .scanner-reports/report.md
   report   Re-render the markdown report from existing JSON reports
+  install-hook
+           Install a Claude Code hook (.claude/settings.json) that triggers
+           an autonomous scan whenever Claude Code commits code
+  hook-stdin
+           Internal: invoked by the hook; reads the hook payload from stdin
+           and only scans when the tool call was a git commit
 
 Options:
   --cwd DIR          Workspace root (default: current directory)
@@ -152,8 +161,125 @@ async function main(): Promise<number> {
     return 0;
   }
 
+  if (args.command === 'install-hook') {
+    return installHook(args.cwd);
+  }
+
+  if (args.command === 'hook-stdin') {
+    return runHookFromStdin(args);
+  }
+
   console.error(`Unknown command: ${args.command}\n\n${USAGE}`);
   return 2;
+}
+
+interface ClaudeSettings {
+  hooks?: {
+    PostToolUse?: Array<{
+      matcher?: string;
+      hooks?: Array<{ type: string; command: string }>;
+    }>;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
+/**
+ * Installs a Claude Code PostToolUse hook into .claude/settings.json so an
+ * autonomous scan runs whenever Claude Code executes a git commit. The hook
+ * invokes `graphify-reviewer hook-stdin`, which inspects the hook payload.
+ */
+function installHook(cwd: string): number {
+  const claudeDir = path.join(cwd, '.claude');
+  const settingsFile = path.join(claudeDir, 'settings.json');
+  fs.mkdirSync(claudeDir, { recursive: true });
+
+  let settings: ClaudeSettings = {};
+  if (fs.existsSync(settingsFile)) {
+    try {
+      settings = JSON.parse(fs.readFileSync(settingsFile, 'utf8')) as ClaudeSettings;
+    } catch {
+      console.error(`Cannot parse existing ${settingsFile} — fix or remove it first.`);
+      return 1;
+    }
+  }
+
+  const hookCommand = 'graphify-reviewer hook-stdin';
+  settings.hooks = settings.hooks ?? {};
+  settings.hooks.PostToolUse = settings.hooks.PostToolUse ?? [];
+
+  const alreadyInstalled = settings.hooks.PostToolUse.some((entry) =>
+    entry.hooks?.some((h) => h.command.includes(hookCommand))
+  );
+  if (alreadyInstalled) {
+    console.log(`Hook already installed in ${settingsFile}`);
+    return 0;
+  }
+
+  settings.hooks.PostToolUse.push({
+    matcher: 'Bash',
+    hooks: [{ type: 'command', command: hookCommand }],
+  });
+
+  fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2) + '\n', 'utf8');
+  console.log(
+    `Installed Claude Code hook in ${settingsFile}\n` +
+      `A scan will now run automatically whenever Claude Code commits code.`
+  );
+  return 0;
+}
+
+interface HookPayload {
+  tool_name?: string;
+  tool_input?: { command?: string };
+  cwd?: string;
+}
+
+function readStdin(): Promise<string> {
+  return new Promise((resolve) => {
+    let data = '';
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', (chunk) => (data += chunk));
+    process.stdin.on('end', () => resolve(data));
+    // Don't hang forever if the harness never pipes anything.
+    setTimeout(() => resolve(data), 5000).unref();
+  });
+}
+
+/**
+ * Hook entry point: reads the Claude Code hook payload from stdin and runs
+ * the scan pipeline only when the completed tool call was a git commit.
+ * Always exits 0 — a hook must never block Claude Code.
+ */
+async function runHookFromStdin(args: ParsedArgs): Promise<number> {
+  const raw = await readStdin();
+  let payload: HookPayload = {};
+  try {
+    payload = JSON.parse(raw) as HookPayload;
+  } catch {
+    return 0;
+  }
+
+  const command = payload.tool_input?.command ?? '';
+  if (!/\bgit\s+commit\b/.test(command)) {
+    return 0; // not a commit — nothing to do
+  }
+
+  const cwd = payload.cwd ? path.resolve(payload.cwd) : args.cwd;
+  console.error(`[graphify-reviewer] commit detected — starting autonomous scan in ${cwd}`);
+
+  const summary = await runAllScans({
+    cwd,
+    paths: args.paths,
+    timeoutMs: args.timeoutMs,
+    logger: (line) => console.error(line),
+  });
+  const parsed = parseReportDir(summary.reportDir);
+  const reportFile = writeMarkdownReport(parsed, cwd, summary.reportDir);
+  console.error(
+    `[graphify-reviewer] ${parsed.findings.length} finding(s). Report: ${reportFile}`
+  );
+  return 0;
 }
 
 main()

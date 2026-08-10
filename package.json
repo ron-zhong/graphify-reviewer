@@ -51,6 +51,23 @@
         }
       }
     },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "graphifyReviewer",
+          "title": "Graphify Reviewer",
+          "icon": "$(shield)"
+        }
+      ]
+    },
+    "views": {
+      "graphifyReviewer": [
+        {
+          "id": "graphifyReviewer.vulnerabilities",
+          "name": "Vulnerabilities"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "graphifyReviewer.runScans",

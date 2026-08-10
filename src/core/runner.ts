@@ -57,9 +57,15 @@ function resolveBin(configured: string | undefined, fallbackName: string): strin
   return configured && configured.trim().length > 0 ? configured : fallbackName;
 }
 
-function isMissing(error: NodeJS.ErrnoException | null, stderr: string): boolean {
+function isMissing(
+  error: NodeJS.ErrnoException | null,
+  code: number | null,
+  stderr: string
+): boolean {
+  if (error?.code === 'ENOENT') { return true; }
+  // POSIX shells report missing commands as exit code 127.
+  if (code === 127) { return true; }
   if (!error) { return false; }
-  if (error.code === 'ENOENT') { return true; }
   // Windows cmd-style "not recognized" and POSIX "command not found".
   return /not recognized|command not found|not found/i.test(stderr);
 }
@@ -119,7 +125,7 @@ async function runStep(
 
   const result = await run(bin, args, options.cwd, timeoutMs);
 
-  if (result.error && isMissing(result.error, result.stderr)) {
+  if (result.error && isMissing(result.error, result.code, result.stderr)) {
     return {
       tool,
       ok: false,

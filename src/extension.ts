@@ -4,6 +4,9 @@ import * as vscode from 'vscode';
 import { runAllScans, CliPaths } from './core/runner';
 import { parseReportDir } from './core/parser';
 import { writeMarkdownReport } from './core/markdown';
+import { DiagnosticsProvider } from './diagnostics';
+import { ClaudeCodeActionProvider, registerFixWithClaude } from './codeActions';
+import { VulnerabilityTreeProvider } from './treeView';
 
 /**
  * Graphify Reviewer — unified agentic code review.
@@ -47,15 +50,53 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(output);
   output.appendLine('Graphify Reviewer activated.');
 
+  const root = workspaceRoot();
+  if (!root) {
+    output.appendLine('No workspace folder — extension idle until one is opened.');
+    return;
+  }
+
+  // Step 3: Diagnostics — squiggles from scanner reports.
+  const diagnostics = new DiagnosticsProvider(root);
+  context.subscriptions.push(diagnostics);
+  const initialFindings = diagnostics.refreshFromDisk();
+
+  // Step 5: Vulnerability Explorer tree view.
+  const treeProvider = new VulnerabilityTreeProvider(root);
+  context.subscriptions.push(treeProvider);
+  treeProvider.update(initialFindings);
+  context.subscriptions.push(
+    vscode.window.registerTreeDataProvider('graphifyReviewer.vulnerabilities', treeProvider)
+  );
+
+  // Step 4: Code actions — "Fix with Claude Code" quick fixes.
+  context.subscriptions.push(
+    vscode.languages.registerCodeActionsProvider(
+      { scheme: 'file' },
+      new ClaudeCodeActionProvider(),
+      { providedCodeActionKinds: ClaudeCodeActionProvider.providedCodeActionKinds }
+    )
+  );
+  registerFixWithClaude(
+    context,
+    root,
+    () => configuredPaths().claude ?? 'claude',
+    output
+  );
+
+  // Keep tree + report in sync when the CLI rewrites reports on disk.
+  const syncFromDisk = () => treeProvider.update(diagnostics.refreshFromDisk());
+  const watcher = vscode.workspace.createFileSystemWatcher(
+    new vscode.RelativePattern(root, '.scanner-reports/*.json')
+  );
+  watcher.onDidCreate(syncFromDisk);
+  watcher.onDidChange(syncFromDisk);
+  watcher.onDidDelete(syncFromDisk);
+  context.subscriptions.push(watcher);
+
   const runScans = vscode.commands.registerCommand(
     'graphifyReviewer.runScans',
     async () => {
-      const root = workspaceRoot();
-      if (!root) {
-        vscode.window.showErrorMessage('Graphify Reviewer: open a workspace folder first.');
-        return;
-      }
-
       await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
@@ -80,8 +121,8 @@ export function activate(context: vscode.ExtensionContext): void {
           const reportFile = writeMarkdownReport(parsed, root, summary.reportDir);
           output.appendLine(`Report written to ${reportFile}`);
 
-          // Diagnostics (Step 3) and tree view (Step 5) will consume
-          // `parsed.findings` here.
+          // Push findings to squiggles + sidebar.
+          treeProvider.update(diagnostics.update(parsed.findings));
 
           const choice = await vscode.window.showInformationMessage(
             `Graphify Reviewer: ${parsed.findings.length} finding(s). Scan ${
@@ -98,16 +139,9 @@ export function activate(context: vscode.ExtensionContext): void {
   );
   context.subscriptions.push(runScans);
 
-  const openReportCmd = vscode.commands.registerCommand(
-    'graphifyReviewer.openReport',
-    async () => {
-      const root = workspaceRoot();
-      if (root) {
-        await openReport(root);
-      }
-    }
+  context.subscriptions.push(
+    vscode.commands.registerCommand('graphifyReviewer.openReport', () => openReport(root))
   );
-  context.subscriptions.push(openReportCmd);
 }
 
 export function deactivate(): void {

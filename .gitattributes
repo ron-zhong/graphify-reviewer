@@ -1,0 +1,3 @@
+# Linux is a target runtime: keep LF line endings so the CLI shebang
+# (#!/usr/bin/env node) works when the repo is cloned on Ubuntu.
+* text=auto eol=lf
