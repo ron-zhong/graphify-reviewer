@@ -1,0 +1,69 @@
+{
+  "name": "graphify-reviewer",
+  "displayName": "Graphify Reviewer",
+  "description": "Autonomous agentic code review: integrates Claude Code, Graphify, SonarQube CLI, and Nexus IQ CLI into a unified review pipeline.",
+  "version": "0.1.0",
+  "publisher": "ron-zhong",
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Linters",
+    "Programming Languages",
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onLanguage:csharp",
+    "onLanguage:java",
+    "onLanguage:python",
+    "onLanguage:typescript"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "Graphify Reviewer",
+      "properties": {
+        "graphifyReviewer.claudePath": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path to the Claude Code CLI executable. Leave empty to resolve 'claude' from the system PATH."
+        },
+        "graphifyReviewer.sonarPath": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path to the sonar-scanner executable. Leave empty to resolve 'sonar-scanner' from the system PATH."
+        },
+        "graphifyReviewer.nexusIqPath": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path to the Nexus IQ CLI executable. Leave empty to resolve 'nexus-iq-cli' from the system PATH."
+        },
+        "graphifyReviewer.graphifyPath": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path to the Graphify CLI executable. Leave empty to resolve 'graphify' from the system PATH."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "graphifyReviewer.runScans",
+        "title": "Graphify Reviewer: Run All Scans",
+        "category": "Graphify Reviewer"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.90.0",
+    "typescript": "^5.4.0"
+  }
+}

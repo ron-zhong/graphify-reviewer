@@ -1,0 +1,6 @@
+node_modules/
+out/
+.scanner-reports/
+graph.json
+*.vsix
+.vscode-test/
