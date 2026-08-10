@@ -22,6 +22,9 @@
     "onLanguage:typescript"
   ],
   "main": "./out/extension.js",
+  "bin": {
+    "graphify-reviewer": "./out/cli/index.js"
+  },
   "contributes": {
     "configuration": {
       "title": "Graphify Reviewer",
@@ -52,6 +55,11 @@
       {
         "command": "graphifyReviewer.runScans",
         "title": "Graphify Reviewer: Run All Scans",
+        "category": "Graphify Reviewer"
+      },
+      {
+        "command": "graphifyReviewer.openReport",
+        "title": "Graphify Reviewer: Open Scan Report",
         "category": "Graphify Reviewer"
       }
     ]

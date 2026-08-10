@@ -68,15 +68,45 @@ Developer commits via Claude Code
  Developer reviews drafted patches ──► full control of final review
 ```
 
+## Components
+
+This repo ships two deliverables over one shared scan engine (`src/core/`, vscode-free):
+
+1. **CLI tool** (`graphify-reviewer`) — run scans and render markdown reports from any terminal or CI pipeline. Developers can trigger scans manually without opening VS Code.
+2. **VS Code extension** — a richer UI/UX over the same engine: manual scan command, squiggly diagnostics, "Fix with Claude Code" quick fixes, a vulnerability explorer sidebar, and the scan report rendered as a markdown preview.
+3. **Claude Code hook** *(planned)* — triggers the pipeline autonomously whenever code is committed from Claude Code.
+
+## CLI Usage
+
+```bash
+npm install -g .          # or: npx graphify-reviewer
+
+# Run all scanners, write .scanner-reports/*.json + report.md
+graphify-reviewer scan --cwd /path/to/workspace
+
+# Re-render the markdown report from existing JSON reports
+graphify-reviewer report --cwd /path/to/workspace
+graphify-reviewer report --print            # to stdout
+
+# Point at CLIs that are not on PATH
+graphify-reviewer scan --sonar /opt/sonar-scanner/bin/sonar-scanner \
+                       --nexus-iq /opt/nexus-iq-cli.jar \
+                       --graphify /usr/local/bin/graphify
+```
+
+Environment overrides: `GRAPHIFY_REVIEWER_CLAUDE_PATH`, `GRAPHIFY_REVIEWER_SONAR_PATH`, `GRAPHIFY_REVIEWER_NEXUS_IQ_PATH`, `GRAPHIFY_REVIEWER_GRAPHIFY_PATH`.
+
 ## Project Status
 
 | Step | Module | Status |
 | ---- | ------ | ------ |
 | 1 | Scaffolding (`package.json`, `extension.ts`) | ✅ Done |
-| 2 | CLI Orchestrator (`src/runner.ts`) | ⬜ Pending |
+| 2 | CLI Orchestrator (`src/core/runner.ts`) | ✅ Done |
+| 2b | CLI tool (`src/cli/index.ts`) + markdown report (`src/core/markdown.ts`) | ✅ Done |
 | 3 | Diagnostics (`src/diagnostics.ts`) | ⬜ Pending |
 | 4 | Code Actions (`src/codeActions.ts`) | ⬜ Pending |
 | 5 | Tree View (`src/treeView.ts`) | ⬜ Pending |
+| 6 | Claude Code commit hook | ⬜ Pending |
 
 ## Configuration
 
@@ -92,3 +122,4 @@ Developer commits via Claude Code
 | Command | Description |
 | ------- | ----------- |
 | `graphifyReviewer.runScans` | Manually run all scanners (Graphify, SonarQube, Nexus IQ) |
+| `graphifyReviewer.openReport` | Open the latest scan report (`report.md`) in a markdown preview |
